@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
-from typing import Optional
+from typing import Optional, Any
 from scipy.special import expit
 from sklearn.metrics import roc_auc_score
+import random
 
 
 def sigmoid(x):
@@ -10,19 +11,32 @@ def sigmoid(x):
 
 
 class MyLogReg:
-    def __init__(self, n_iter: int = 10, learning_rate: float = 0.1,
-                 weights: Optional[np.ndarray] = None, metric: Optional[str] = None) -> None:
+    def __init__(self,
+                 n_iter: int = 10,
+                 learning_rate: Any = 0.1,
+                 weights: Optional[np.ndarray] = None,
+                 metric: Optional[str] = None,
+                 reg: Optional[str] = None,
+                 l1_coef: float = 0,
+                 l2_coef: float = 0,
+                 sgd_sample: float = None,
+                 random_state: int = 42) -> None:
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights = weights
         self.metric = metric
         self.best_score = None
+        self.reg = reg
+        self.l1_coef = l1_coef
+        self.l2_coef = l2_coef
+        self.rangom_state = random_state
+        self.sgd_sample = sgd_sample
 
     def __str__(self) -> str:
         return f'MyLogReg class: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
 
     def fit(self, X: pd.DataFrame, y: pd.Series, verbose: Optional[bool] = False) -> None:
-        X = X.copy()  # чтобы не менять оригинальный dataframe
+        random.seed(self.rangom_state)
         X.insert(0, 'x0', 1)  # оптимизация для нахождения градиента
         cnt_features = X.shape[1]
 
@@ -30,17 +44,42 @@ class MyLogReg:
             self.weights = np.ones(cnt_features)
 
         for i in range(self.n_iter):
-            y_pred = np.dot(X, self.weights)
+            if self.sgd_sample is None:
+                y_pred = np.dot(X, self.weights)
+                y_select = y
+                X_select = X
+            else:
+                if isinstance(self.sgd_sample, float):
+                    self.sgd_sample = round(X.shape[0] * self.sgd_sample)
+
+                sample_rows_idx = random.sample(
+                    range(X.shape[0]), self.sgd_sample)
+                y_pred = np.dot(X, self.weights)[sample_rows_idx]
+                y_select = y.iloc[sample_rows_idx]
+                X_select = X.iloc[sample_rows_idx]
+
             y_prob = sigmoid(y_pred)
 
             # Добавляем небольшое значение для предотвращения log(0)
             epsilon = 1e-15
-            y_prob = np.clip(y_prob, epsilon, 1 - epsilon)
-            logloss = -np.mean(y * np.log(y_prob) + (1 - y)
-                               * np.log(1 - y_prob))
+            logloss = -np.mean(y_select * np.log(y_prob + epsilon) + (1 - y_select)
+                               * np.log(1 - y_prob + epsilon))
 
-            grad = (y_prob - y) @ X / X.shape[0]
-            self.weights -= self.learning_rate * grad
+            regular = 0
+            if self.reg is not None:
+                if self.reg == 'l1':
+                    regular = self.l1()
+                elif self.reg == 'l2':
+                    regular = self.l2()
+                else:
+                    regular = self.elasticnet()
+
+            grad = (y_prob - y_select) @ X_select / X_select.shape[0] + regular
+
+            if callable(self.learning_rate):
+                self.weights -= grad * self.learning_rate(i + 1)
+            else:
+                self.weights -= grad * self.learning_rate
 
             if self.metric is not None:
                 if self.metric == 'accuracy':
@@ -69,6 +108,36 @@ class MyLogReg:
         X.insert(0, 'x0', 1)
         y_pred = np.dot(X, self.weights)
         return sigmoid(y_pred)
+
+    def l1(self) -> np.ndarray:
+        """
+        Вычисляет L1-регуляризацию для текущих весов модели.
+
+        Returns:
+            np.ndarray: Значения L1-регуляризации, умноженные на коэффициент l1_coef.
+
+        """
+        return self.l1_coef * np.sign(self.weights)
+
+    def l2(self) -> np.ndarray:
+        """
+        Вычисляет L2-регуляризацию для текущих весов модели.
+
+        Returns:
+            np.ndarray: Значения L2-регуляризации, умноженные на коэффициент l2_coef.
+
+        """
+        return self.l2_coef * 2 * self.weights
+
+    def elasticnet(self) -> np.ndarray:
+        """
+        Вычисляет комбинацию L1 и L2-регуляризации (Elastic Net) для текущих весов модели.
+
+        Returns:
+            np.ndarray: Сумма L1 и L2-регуляризаций.
+
+        """
+        return self.l1() + self.l2()
 
     def accuracy(self, X: pd.DataFrame, y: pd.Series) -> float:
         pred = self.predict(X)
