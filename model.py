@@ -21,6 +21,21 @@ class MyLogReg:
                  l2_coef: float = 0,
                  sgd_sample: float = None,
                  random_state: int = 42) -> None:
+        """
+        Инициализирует модель логистической регрессии.
+
+        Args:
+            n_iter (int, optional): Максимальное количество итераций для обучения. По умолчанию 10.
+            learning_rate (Any, optional): Скорость обучения. Может быть числом или callable. По умолчанию 0.1.
+            weights (Optional[np.ndarray], optional): Начальные веса. По умолчанию None.
+            metric (Optional[str], optional): Метрика для оценки модели во время обучения. По умолчанию None.
+            reg (Optional[str], optional): Тип регуляризации ('l1', 'l2' или 'elasticnet'). По умолчанию None.
+            l1_coef (float, optional): Коэффициент для L1-регуляризации. По умолчанию 0.
+            l2_coef (float, optional): Коэффициент для L2-регуляризации. По умолчанию 0.
+            sgd_sample (Optional[float], optional): Доля выборки для SGD. По умолчанию None.
+            random_state (int, optional): Случайное состояние. По умолчанию 42.
+
+        """
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights = weights
@@ -33,9 +48,25 @@ class MyLogReg:
         self.sgd_sample = sgd_sample
 
     def __str__(self) -> str:
+        """
+        Возвращает строковое представление объекта MyLogReg.
+
+        Returns:
+            str: Строковое представление.
+
+        """
         return f'MyLogReg class: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
 
     def fit(self, X: pd.DataFrame, y: pd.Series, verbose: Optional[bool] = False) -> None:
+        """
+        Обучает модель логистической регрессии на данных X и y.
+
+        Args:
+            X (pd.DataFrame): Матрица признаков.
+            y (pd.Series): Вектор целевых значений.
+            verbose (Optional[bool], optional): Отображать информацию об обучении. По умолчанию False.
+
+        """
         random.seed(self.rangom_state)
         X.insert(0, 'x0', 1)  # оптимизация для нахождения градиента
         cnt_features = X.shape[1]
@@ -100,10 +131,29 @@ class MyLogReg:
                 print(f'{i} | loss: {logloss:.2f}| {self.metric}: {metric_value}')
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Делает предсказания на основе обученной модели.
+
+        Args:
+            X (pd.DataFrame): Матрица признаков.
+
+        Returns:
+            np.ndarray: Вектор предсказанных классов (0 или 1).
+
+        """
         y_prob = self.predict_proba(X)
         return np.where(y_prob > 0.5, 1, 0)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Делает предсказания вероятностей на основе обученной модели.
+
+        Args:
+            X (pd.DataFrame): Матрица признаков.
+
+        Returns:
+            np.ndarray: Вектор предсказанных вероятностей.
+        """
         X = X.copy()  # чтобы не менять оригинальный dataframe
         X.insert(0, 'x0', 1)
         y_pred = np.dot(X, self.weights)
@@ -114,7 +164,6 @@ class MyLogReg:
         Вычисляет L1-регуляризацию для текущих весов модели.
 
         Returns:
-            np.ndarray: Значения L1-регуляризации, умноженные на коэффициент l1_coef.
 
         """
         return self.l1_coef * np.sign(self.weights)
@@ -140,10 +189,30 @@ class MyLogReg:
         return self.l1() + self.l2()
 
     def accuracy(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Вычисляет accuracy модели.
+
+        Args:
+          X (pd.DataFrame): Матрица признаков.
+          y (pd.Series): Вектор целевых значений.
+        Returns:
+           float: Значение accuracy модели.
+
+       """
         pred = self.predict(X)
         return np.mean(pred == y)
 
     def precision(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Вычисляет precision модели.
+
+        Args:
+          X (pd.DataFrame): Матрица признаков.
+          y (pd.Series): Вектор целевых значений.
+        Returns:
+           float: Значение precision модели.
+
+       """
         pred = self.predict(X)
         tp = np.sum((pred == 1) & (y == 1))
         fp = np.sum((pred == 1) & (y == 0))
@@ -152,6 +221,16 @@ class MyLogReg:
         return tp / (tp + fp)
 
     def recall(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Вычисляет recall модели.
+
+        Args:
+          X (pd.DataFrame): Матрица признаков.
+          y (pd.Series): Вектор целевых значений.
+        Returns:
+           float: Значение recall модели.
+
+       """
         pred = self.predict(X)
         tp = np.sum((pred == 1) & (y == 1))
         fn = np.sum((pred == 0) & (y == 1))
@@ -160,6 +239,17 @@ class MyLogReg:
         return tp / (tp + fn)
 
     def f1(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Вычисляет F1-меру модели.
+
+        Args:
+            X (pd.DataFrame): Матрица признаков.
+            y (pd.Series): Вектор целевых значений.
+
+        Returns:
+           float: Значение F1-меры модели.
+
+        """
         pr = self.precision(X, y)
         re = self.recall(X, y)
         if pr + re == 0:
@@ -167,10 +257,25 @@ class MyLogReg:
         return (2 * pr * re) / (pr + re)
 
     def roc_auc(self, X: pd.DataFrame, y: pd.Series) -> float:
+        """
+        Вычисляет ROC AUC модели.
+
+        Args:
+          X (pd.DataFrame): Матрица признаков.
+          y (pd.Series): Вектор целевых значений.
+        Returns:
+           float: Значение ROC AUC модели.
+       """
         y_prob = self.predict_proba(X)
         return roc_auc_score(y, y_prob)
 
     def get_best_score(self):
+        """
+        Возвращает лучшее значение метрики.
+
+        Returns:
+           Optional[float]:  Лучшее значение метрики.
+        """
         return self.best_score
 
     def get_coef(self) -> np.ndarray:
